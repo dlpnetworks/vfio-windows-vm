@@ -1,0 +1,54 @@
+#!/bin/bash
+dev="0000:00:1f.3"
+
+systemctl start nmb
+systemctl start smb
+systemctl stop linux-nvidia.service
+
+# Libvirt must run without firewalld
+#systemctl stop firewalld.service
+#systemctl restart libvirtd.service
+sleep 1
+
+modprobe virtio-pci
+modprobe virtio-net
+modprobe virtio-blk
+modprobe virtio-balloon
+modprobe virtio-ring
+modprobe virtio
+modprobe nft_masq_ipv4
+modprobe nft_masq_ipv6
+modprobe nft_chain_nat_ipv6
+modprobe nft_chain_nat_ipv4
+
+# Rescan pci devices in case prior run failed
+echo 1 > /sys/bus/pci/rescan
+
+# Trying to unbind the GPU results in general protection faults.
+# Removing the binding ID from vfio-pci and then resetting the PCI device seems
+# to work properly. It also auto-retaches to the nvidia module this way.
+
+# Wait for device to wake up
+while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
+    vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
+    device=$(cat /sys/bus/pci/devices/${dev}/device)
+
+    echo "Hot remove pci device at ${dev}"
+    echo 1 > /sys/bus/pci/devices/${dev}/remove
+    while [[ -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+    echo "Rescan pci bus to rediscover ${dev}"
+    echo 1 > /sys/bus/pci/rescan
+    while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+    
+    echo "Adding ${dev} (${vendor} ${device}) to vfio-pci id list"
+    ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/new_id 2>/dev/null
+    while [[ ! -e "/sys/bus/pci/devices/${dev}/config" ]]; do sleep 0.1; done
+    sleep 0.1
+fi
+
+echo "Starting virtual machine"
+virsh start dlp-us-sv-win1
+

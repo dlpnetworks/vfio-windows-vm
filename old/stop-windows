@@ -1,0 +1,38 @@
+#!/bin/bash
+dev="0000:00:1f.3"
+
+virsh shutdown dlp-us-sv-win1
+sleep 3
+
+systemctl stop nmb
+systemctl stop smb
+systemctl start firewalld.service
+! systemctl start linux-nvidia.service
+sleep 1
+
+# Rescan pci devices in case prior run failed
+echo 1 > /sys/bus/pci/rescan
+
+# Trying to unbind the GPU results in general protection faults.
+# Removing the binding ID from vfio-pci and then resetting the PCI device seems
+# to work properly. It also auto-retaches to the nvidia module this way.
+
+# Wait for device to wake up
+while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
+    vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
+    device=$(cat /sys/bus/pci/devices/${dev}/device)
+    
+    echo "Removing ${dev} (${vendor} ${device}) from vfio-pci id list"
+    ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/remove_id &2>/dev/null
+    sleep 0.1
+
+    echo "Hot remove pci device at ${dev}"
+    echo 1 > /sys/bus/pci/devices/${dev}/remove
+    while [[ -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+    echo "Rescan pci bus to rediscover ${dev}"
+    echo 1 > /sys/bus/pci/rescan
+    while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+fi

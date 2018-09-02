@@ -18,13 +18,20 @@ VM_DOMAIN="dlp-us-sv-win1"
 #
 PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3"
 
+# Blacklised services and modules are stopped before devices are passed through and restarted
+# after the VM is stopped
 BLACKLISTED_SERVICES="bumblebeed"
-ENSURE_SERVICES="libvirtd"
-START_SERVICES="nmb smb"
-
 BLACKLISTED_MODULES="nouveau"
-#BLACKLISTED_MODULES="nvidia_modeset nvidia nouveau"
+#BLACKLISTED_MODULES="nvidia_modeset nvidia"
+
+# Ensured services and modules are started before devices are passed through, but are not
+# stopped after devices are reattached
+ENSURE_SERVICES="libvirtd"
 ENSURE_MODULES="virtio virtio-net virtio-blk virtio-balloon virtio-ring nft_masq_ipv4 nft_masq_ipv6 nft_chain_nat_ipv6 nft_chain_nat_ipv4"
+
+# Start services and modules are started before devices are passed through and stopped after
+# devices are reattached
+START_SERVICES="nmb smb"
 START_MODULES="virtio-pci"
 
 
@@ -42,7 +49,7 @@ case "$1" in
     "")
         ;&
 
-    verify)
+    start)
         echo "[INFO] Verifying Configuration"
 
         if [[ ! $(virsh domstate ${VM_DOMAIN}) =~ "shut off" ]]; then
@@ -207,3 +214,4 @@ case "$1" in
         echo "[INFO] Done!"
         ;&
 esac
+

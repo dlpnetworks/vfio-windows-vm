@@ -27,11 +27,11 @@ BLACKLISTED_MODULES="nouveau"
 # Ensured services and modules are started before devices are passed through, but are not
 # stopped after devices are reattached
 ENSURE_SERVICES="libvirtd"
-ENSURE_MODULES="virtio virtio_net virtio_blk virtio_console virtio_balloon virtio_ring 9pnet_virtio virtio_crypto iptable_nat" # nf_nat nf_tables nft_masq_ipv4 nft_masq_ipv6 nft_chain_nat_ipv6 nft_chain_nat_ipv4"
+ENSURE_MODULES="virtio virtio_net virtio_blk virtio_console virtio_balloon virtio_ring 9pnet_virtio virtio_crypto iptable_nat ip_conntrack_netbios_ns nf_nat nf_tables nft_masq_ipv4 nft_masq_ipv6 nft_chain_nat_ipv6 nft_chain_nat_ipv4"
 
 # Start services and modules are started before devices are passed through and stopped after
 # devices are reattached
-START_SERVICES="nmb smb"
+START_SERVICES="nmb smb winbind"
 START_MODULES="virtio-pci"
 
 

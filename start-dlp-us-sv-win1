@@ -147,6 +147,8 @@ case "$1" in
         ;&
 
     wait-vm)
+        read -p "[WAIT] Press enter when VM has completed"
+
         echo "[INFO] Waiting for virtual machine to exit"
         while true; do
             sleep 15

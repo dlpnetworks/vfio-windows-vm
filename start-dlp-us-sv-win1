@@ -127,7 +127,7 @@ case "$1" in
                 
                 echo "[INFO] ----> Adding device to vfio-pci id list"
                 echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/new_id
-                sleep 1
+                sleep 2
 
                 echo "[INFO] ----> Verifying device is attached to vfio-pci stub driver"
                 if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
@@ -164,7 +164,7 @@ case "$1" in
                 
                 echo "[INFO] ----> Removing device from vfio-pci id list"
                 ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/remove_id
-                sleep 1
+                sleep 2
 
                 echo "[INFO] ----> Issuing PCI hotplug remove command"
                 echo 1 > /sys/bus/pci/devices/${dev}/remove
@@ -177,6 +177,7 @@ case "$1" in
                 echo "[INFO] ----> Verifying device is no longer attached to vfio-pci stub driver"
                 if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
                     echo "[ERROR] ----> DEVICE IS STILL ATTACHED TO VFIO-PCI"
+                    echo "Run $0 restore-devices again"
                 fi
             else
                 echo "[INFO] -> Device ${dev} is not attached to vfio-pci"

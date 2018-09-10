@@ -90,7 +90,7 @@ case "$1" in
             echo "[INFO] -> Unloading kernel module ${i}"
             ! modprobe -r ${i} 2>/dev/null
         done
-        
+
         for i in ${ENSURE_SERVICES} ${START_SERVICES}; do
             echo "[INFO] -> Starting service ${i}"
             systemctl start ${i}
@@ -112,31 +112,41 @@ case "$1" in
         # to work properly. It also auto-retaches to the nvidia module this way.
         for dev in ${PCI_DEVICEIDS}
         do
-            if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
-                vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
-                device=$(cat /sys/bus/pci/devices/${dev}/device)
-                echo "[INFO] -> Passing through device ${dev} (${vendor} ${device})"
-
-                echo "[INFO] ----> Issuing PCI hotplug remove command"
-                echo 1 > /sys/bus/pci/devices/${dev}/remove
-                while [[ -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
-
-                echo "[INFO] ----> Rescan PCI bus to rediscover device"
-                echo 1 > /sys/bus/pci/rescan
-                while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
-                
-                echo "[INFO] ----> Adding device to vfio-pci id list"
-                echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/new_id
-                sleep 2
-
-                echo "[INFO] ----> Verifying device is attached to vfio-pci stub driver"
+            for it in {1..5}; do
                 if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
-                    echo "[ERROR] ----> DEVICE IS NOT ATTACHED TO VFIO-PCI"
-                    exit 1
+                    vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
+                    device=$(cat /sys/bus/pci/devices/${dev}/device)
+                    echo "[INFO] -> Passing through device ${dev} (${vendor} ${device}) Attempt {it}"
+
+                    echo "[INFO] ----> Issuing PCI hotplug remove command"
+                    echo 1 > /sys/bus/pci/devices/${dev}/remove
+                    while [[ -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+                    echo "[INFO] ----> Rescan PCI bus to rediscover device"
+                    echo 1 > /sys/bus/pci/rescan
+                    while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+                    echo "[INFO] ----> Adding device to vfio-pci id list"
+                    echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/new_id
+                    sleep 2
+
+                    echo "[INFO] ----> Verifying device is attached to vfio-pci stub driver"
+                    if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
+                        if [[ "${it}" -eq 5 ]]; then
+                            echo "[ERROR] ----> DEVICE IS NOT ATTACHED TO VFIO-PCI"
+                            exit 1
+                        else
+                            echo "[WARN] ----> DEVICE IS NOT ATTACHED TO VFIO-PCI"
+                            sleep 5
+                            continue
+                        fi
+                    fi
+                    break
+                else
+                    echo "[INFO] -> Device ${dev} is already attached to vfio-pci"
+                    break
                 fi
-            else
-                echo "[INFO] -> Device ${dev} is already attached to vfio-pci"
-            fi
+            done
         done
         ;&
 
@@ -159,37 +169,48 @@ case "$1" in
     restore-devices)
         for dev in ${PCI_DEVICEIDS}
         do
-            if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
-                vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
-                device=$(cat /sys/bus/pci/devices/${dev}/device)
-                echo "[INFO] -> Returning device ${dev} to host (${vendor} ${device})"
-                
-                echo "[INFO] ----> Removing device from vfio-pci id list"
-                ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/remove_id
-                sleep 2
-
-                echo "[INFO] ----> Issuing PCI hotplug remove command"
-                echo 1 > /sys/bus/pci/devices/${dev}/remove
-                while [[ -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
-                
-                echo "[INFO] ----> Rescan PCI bus to rediscover device"
-                echo 1 > /sys/bus/pci/rescan
-                while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
-                
-                echo "[INFO] ----> Verifying device is no longer attached to vfio-pci stub driver"
+            for it in {1..5}; do
                 if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
-                    echo "[ERROR] ----> DEVICE IS STILL ATTACHED TO VFIO-PCI"
-                    echo "Run $0 restore-devices again"
+                    vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
+                    device=$(cat /sys/bus/pci/devices/${dev}/device)
+                    echo "[INFO] -> Returning device ${dev} to host (${vendor} ${device})"
+
+                    echo "[INFO] ----> Removing device from vfio-pci id list"
+                    ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/remove_id
+                    sleep 2
+
+                    echo "[INFO] ----> Issuing PCI hotplug remove command"
+                    echo 1 > /sys/bus/pci/devices/${dev}/remove
+                    while [[ -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+                    echo "[INFO] ----> Rescan PCI bus to rediscover device"
+                    echo 1 > /sys/bus/pci/rescan
+                    while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+                    echo "[INFO] ----> Verifying device is no longer attached to vfio-pci stub driver"
+                    if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
+                        if [[ "${it}" -eq 5 ]]; then
+                            echo "[ERROR] ----> DEVICE IS STILL ATTACHED TO VFIO-PCI"
+                            echo "Run $0 restore-devices again"
+                            exit 1
+                        else
+                            echo "[WARN] ----> DEVICE IS STILL ATTACHED TO VFIO-PCI"
+                            sleep 5
+                            continue
+                        fi
+                    fi
+                    break
+                else
+                    echo "[INFO] -> Device ${dev} is not attached to vfio-pci"
+                    break
                 fi
-            else
-                echo "[INFO] -> Device ${dev} is not attached to vfio-pci"
-            fi
+            done
         done
         ;&
 
     restore-services)
         echo "[INFO] Restoring services and drivers"
-        
+
         for i in ${START_SERVICES}; do
             echo "[INFO] -> Stopping service ${i}"
             systemctl is-active --quiet ${i} && systemctl stop ${i}

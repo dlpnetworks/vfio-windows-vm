@@ -108,15 +108,13 @@ case "$1" in
         echo "[INFO] Passing through PCI devices"
 
         # Trying to unbind the GPU results in general protection faults.
-        # Removing the binding ID from vfio-pci and then resetting the PCI device seems
-        # to work properly. It also auto-retaches to the nvidia module this way.
         for dev in ${PCI_DEVICEIDS}
         do
             for it in {1..5}; do
                 if [[ ! -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
                     vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
                     device=$(cat /sys/bus/pci/devices/${dev}/device)
-                    echo "[INFO] -> Passing through device ${dev} (${vendor} ${device}) Attempt {it}"
+                    echo "[INFO] -> Passing through device ${dev} (${vendor} ${device}) Attempt ${it}"
 
                     echo "[INFO] ----> Issuing PCI hotplug remove command"
                     echo 1 > /sys/bus/pci/devices/${dev}/remove
@@ -153,7 +151,7 @@ case "$1" in
     start-vm)
         echo "[INFO] Starting virtual machine (${VM_DOMAIN})"
         virsh start ${VM_DOMAIN}
-        sleep 30
+        sleep 15
         ;&
 
     wait-vm)
@@ -173,7 +171,7 @@ case "$1" in
                 if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
                     vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
                     device=$(cat /sys/bus/pci/devices/${dev}/device)
-                    echo "[INFO] -> Returning device ${dev} to host (${vendor} ${device})"
+                    echo "[INFO] -> Returning device ${dev} to host (${vendor} ${device}) Attempt ${it}"
 
                     echo "[INFO] ----> Removing device from vfio-pci id list"
                     ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/remove_id

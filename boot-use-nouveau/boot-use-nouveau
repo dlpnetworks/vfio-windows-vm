@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# 
+# Attaches the graphics card to nouveau upon host boot
+#
+#!/bin/bash
+set -e
+
+
+#################
+# Configuration #
+#################
+
+#
+# List of devices that need to be passed to the host
+#
+# 01:00.0 VGA compatible controller: NVIDIA Corporation GP104 [GeForce GTX 1070] (rev a1)
+# 01:00.1 Audio device: NVIDIA Corporation GP104 High Definition Audio Controller (rev a1)
+# 00:1f.3 Audio device: Intel Corporation 200 Series PCH HD Audio
+#
+PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3"
+
+# Check root access
+if [[ $EUID -ne 0 ]]; then
+    echo "this script must be run as the super-user"
+    exit 1
+fi
+echo "[INFO] Rescanning PCI devices in case prior run failed"
+echo 1 > /sys/bus/pci/rescan
+sleep 0.5
+
+echo "[INFO] Verifying that devices exist"
+for i in ${PCI_DEVICEIDS}; do
+    if [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; then
+        echo "[ERROR] Device ${dev} was not found"
+        echo "[ERROR] /sys/bus/pci/devices/${dev} was not found"
+        exit 1
+    fi
+done
+
+for dev in ${PCI_DEVICEIDS}
+do
+    for it in {1..5}; do
+        if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
+            vendor=$(cat /sys/bus/pci/devices/${dev}/vendor)
+            device=$(cat /sys/bus/pci/devices/${dev}/device)
+            echo "[INFO] -> Returning device ${dev} to host (${vendor} ${device}) Attempt ${it}"
+
+            echo "[INFO] ----> Removing device from vfio-pci id list"
+            ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/remove_id
+            sleep 0.5
+
+            echo "[INFO] ----> Issuing PCI hotplug remove command"
+            echo 1 > /sys/bus/pci/devices/${dev}/remove
+            while [[ -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+            echo "[INFO] ----> Rescan PCI bus to rediscover device"
+            echo 1 > /sys/bus/pci/rescan
+            while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
+
+            echo "[INFO] ----> Verifying device is no longer attached to vfio-pci stub driver"
+            if [[ -e "/sys/bus/pci/drivers/vfio-pci/${dev}" ]]; then
+                if [[ "${it}" -eq 5 ]]; then
+                    echo "[ERROR] ----> DEVICE IS STILL ATTACHED TO VFIO-PCI"
+                    echo "Run $0 restore-devices again"
+                    exit 1
+                else
+                    echo "[WARN] ----> DEVICE IS STILL ATTACHED TO VFIO-PCI"
+                    sleep 5
+                    continue
+                fi
+            fi
+            break
+        else
+            echo "[INFO] -> Device ${dev} is not attached to vfio-pci"
+            break
+        fi
+    done
+done

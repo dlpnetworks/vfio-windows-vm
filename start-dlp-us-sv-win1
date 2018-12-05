@@ -20,8 +20,8 @@ PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3"
 
 # Blacklised services and modules are stopped before devices are passed through and restarted
 # after the VM is stopped
-BLACKLISTED_SERVICES="bumblebeed"
-BLACKLISTED_MODULES="nouveau"
+BLACKLISTED_SERVICES="gdm bumblebeed"
+BLACKLISTED_MODULES="nouveau snd_hda_intel"
 #BLACKLISTED_MODULES="nvidia_modeset nvidia"
 
 # Ensured services and modules are started before devices are passed through, but are not
@@ -80,6 +80,11 @@ case "$1" in
 
     prep-services)
         echo "[INFO] Preparing services and drivers"
+
+        ! ps axco command | grep gnome | xargs killall 2>/dev/null
+        ! ps axco command | grep gdm- | xargs killall 2>/dev/null
+
+        sleep 3
 
         for i in ${BLACKLISTED_SERVICES}; do
             echo "[INFO] -> Stopping service ${i}"

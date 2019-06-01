@@ -15,13 +15,14 @@ VM_DOMAIN="dlp-us-sv-win1"
 # 01:00.0 VGA compatible controller: NVIDIA Corporation GP104 [GeForce GTX 1070] (rev a1)
 # 01:00.1 Audio device: NVIDIA Corporation GP104 High Definition Audio Controller (rev a1)
 # 00:1f.3 Audio device: Intel Corporation 200 Series PCH HD Audio
+# 00:14.0 USB device: Intel Corporation 200 Series/Z370 Chipset Family USB 3.0 xHCI Controller
 #
-PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3"
+PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3 0000:00:14.0"
 
 # Blacklised services and modules are stopped before devices are passed through and restarted
 # after the VM is stopped
 BLACKLISTED_SERVICES="gdm bumblebeed"
-BLACKLISTED_MODULES="nouveau snd_hda_intel"
+BLACKLISTED_MODULES="nvidia_modeset nvidia_uvm nvidia snd_hda_intel"
 #BLACKLISTED_MODULES="nvidia_modeset nvidia"
 
 # Ensured services and modules are started before devices are passed through, but are not
@@ -31,7 +32,7 @@ ENSURE_MODULES="virtio virtio_net virtio_blk virtio_console virtio_balloon virti
 
 # Start services and modules are started before devices are passed through and stopped after
 # devices are reattached
-START_SERVICES="nmb smb winbind"
+START_SERVICES="nmb smb" # winbind"
 START_MODULES="virtio-pci"
 
 
@@ -160,7 +161,7 @@ case "$1" in
         ;&
 
     wait-vm)
-        read -p "[WAIT] Press enter when VM has completed"
+        #read -p "[WAIT] Press enter when VM has completed"
 
         echo "[INFO] Waiting for virtual machine to exit"
         while true; do

@@ -15,21 +15,19 @@ VM_DOMAIN="dlp-us-sv-win1"
 # 01:00.0 VGA compatible controller: NVIDIA Corporation GP104 [GeForce GTX 1070] (rev a1)
 # 01:00.1 Audio device: NVIDIA Corporation GP104 High Definition Audio Controller (rev a1)
 # 00:1f.3 Audio device: Intel Corporation 200 Series PCH HD Audio
-# 00:14.0 USB device: Intel Corporation 200 Series/Z370 Chipset Family USB 3.0 xHCI Controller
 #
-PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3 0000:00:14.0"
+PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3"
 
 # Blacklised services and modules are stopped before devices are passed through and restarted
 # after the VM is stopped
 BLACKLISTED_SERVICES="gdm bumblebeed"
-BLACKLISTED_MODULES="nvidia_drm nvidia_modeset nvidia_uvm nvidia snd_hda_intel"
+BLACKLISTED_MODULES="nvidia_modeset nvidia_uvm nvidia snd_hda_intel"
 #BLACKLISTED_MODULES="nvidia_modeset nvidia"
 
 # Ensured services and modules are started before devices are passed through, but are not
 # stopped after devices are reattached
 ENSURE_SERVICES="libvirtd"
-#ENSURE_MODULES="virtio virtio_net virtio_blk virtio_console virtio_balloon virtio_ring 9pnet_virtio virtio_crypto iptable_nat ip_conntrack_netbios_ns nf_nat nf_tables nft_masq_ipv4 nft_masq_ipv6 nft_chain_nat_ipv6 nft_chain_nat_ipv4"
-ENSURE_MODULES="virtio virtio_net virtio_blk virtio_console virtio_balloon virtio_ring 9pnet_virtio virtio_crypto iptable_nat ip_conntrack_netbios_ns nf_nat nf_tables nft_masq nft_chain_nat"
+ENSURE_MODULES="virtio virtio_net virtio_blk virtio_console virtio_balloon virtio_ring 9pnet_virtio virtio_crypto iptable_nat ip_conntrack_netbios_ns nf_nat nf_tables nft_masq_ipv4 nft_masq_ipv6 nft_chain_nat_ipv6 nft_chain_nat_ipv4"
 
 # Start services and modules are started before devices are passed through and stopped after
 # devices are reattached
@@ -73,7 +71,9 @@ case "$1" in
         done
 
         echo "[INFO] Verifying that kernel modules exist"
-        modprobe -n ${ENSURE_MODULES} ${START_MODULES}
+        for i in ${ENSURE_MODULES} ${START_MODULES}; do
+            modprobe -n ${i}
+        done
 
         echo "[INFO] Configuration Verified"
         ;&
@@ -91,8 +91,10 @@ case "$1" in
             systemctl is-active --quiet ${i} && systemctl stop ${i}
         done
 
-        echo "[INFO] -> Unloading kernel module ${BLACKLISTED_MODULES}"
-        modprobe -r ${BLACKLISTED_MODULES} 
+        for i in ${BLACKLISTED_MODULES}; do
+            echo "[INFO] -> Unloading kernel module ${i}"
+            ! modprobe -r ${i} 2>/dev/null
+        done
 
         for i in ${ENSURE_SERVICES} ${START_SERVICES}; do
             echo "[INFO] -> Starting service ${i}"
@@ -105,9 +107,6 @@ case "$1" in
         done
 
         sleep 0.25
-        
-        #read -p "Make Sure Nvidia is Unloaded. Press Any Key to Continue: "
-
         ;&
 
     passthrough-devices)
@@ -161,7 +160,7 @@ case "$1" in
         ;&
 
     wait-vm)
-        #read -p "[WAIT] Press enter when VM has completed"
+        read -p "[WAIT] Press enter when VM has completed"
 
         echo "[INFO] Waiting for virtual machine to exit"
         while true; do

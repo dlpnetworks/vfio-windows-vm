@@ -73,7 +73,7 @@ case "$1" in
         done
 
         echo "[INFO] Verifying that kernel modules exist"
-        modprobe -n ${ENSURE_MODULES} ${START_MODULES}
+        ! modprobe -n ${ENSURE_MODULES} ${START_MODULES}
 
         echo "[INFO] Configuration Verified"
         ;&
@@ -92,7 +92,7 @@ case "$1" in
         done
 
         echo "[INFO] -> Unloading kernel module ${BLACKLISTED_MODULES}"
-        modprobe -r ${BLACKLISTED_MODULES} 
+        ! modprobe -r ${BLACKLISTED_MODULES} 
 
         for i in ${ENSURE_SERVICES} ${START_SERVICES}; do
             echo "[INFO] -> Starting service ${i}"
@@ -101,7 +101,7 @@ case "$1" in
 
         for i in ${ENSURE_MODULES} ${START_MODULES}; do
             echo "[INFO] -> Loading kernel module ${i}"
-            modprobe ${i}
+            ! modprobe ${i}
         done
 
         sleep 0.25

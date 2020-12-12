@@ -156,8 +156,8 @@ case "$1" in
 
     start-vm)
         echo "[INFO] Starting virtual machine (${VM_DOMAIN})"
-        ulimit -r 99
-        sysctl -w kernel.sched_rt_runtime_us=-1
+        #ulimit -r 99
+        #sysctl -w kernel.sched_rt_runtime_us=-1
         virsh start ${VM_DOMAIN}
         sleep 15
         ;&
@@ -173,8 +173,8 @@ case "$1" in
         ;&
     
     restore-settings)
-        ulimit -r 0
-        sysctl -w kernel.sched_rt_runtime_us=950000
+        #ulimit -r 0
+        #sysctl -w kernel.sched_rt_runtime_us=950000
         ;&
 
     restore-devices)

@@ -36,6 +36,9 @@ ENSURE_MODULES="virtio virtio_net virtio_blk virtio_console virtio_balloon virti
 START_SERVICES="nmb smb" # winbind"
 START_MODULES="virtio-pci"
 
+# Number of HugePages to request.
+# Should be approximately memory allocation divided by 1GiB
+HUGEPAGE_COUNT=16
 
 ################
 # DO NOT TOUCH #
@@ -154,6 +157,26 @@ case "$1" in
         done
         ;&
 
+    setup-hugepages)
+        echo "[INFO] Dropping kernel caches & compacting memory"
+        echo 3 > /proc/sys/vm/drop_caches
+        echo 1 > /proc/sys/vm/compact_memory
+        
+        echo "[INFO] Attempting to allocate ${HUGEPAGE_COUNT} HugePages"
+        echo ${HUGEPAGE_COUNT} > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+
+        ALLOC_PAGES=`cat /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages`
+        echo "[INFO] Tried to allocate hugepages. Got pages ${ALLOC_PAGES} / ${HUGEPAGE_COUNT}"
+
+        if [ "${ALLOC_PAGES}" -ne "${HUGEPAGE_COUNT}" ]
+        then
+            echo "[ERROR] Unable to allocate sufficient hugepages"
+            echo 0 > /proc/sys/vm/nr_hugepages
+            exit 1
+        fi
+
+        ;&
+
     start-vm)
         echo "[INFO] Starting virtual machine (${VM_DOMAIN})"
         #ulimit -r 99
@@ -176,6 +199,13 @@ case "$1" in
         #ulimit -r 0
         #sysctl -w kernel.sched_rt_runtime_us=950000
         ;&
+
+    teardown-hugepages)
+        echo "[INFO] Attempting to deallocate ${HUGEPAGE_COUNT} HugePages"
+        echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+
+        ;&
+
 
     restore-devices)
         for dev in ${PCI_DEVICEIDS}

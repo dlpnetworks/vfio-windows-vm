@@ -93,6 +93,7 @@ case "$1" in
 
         ! ps axco command | grep gnome | xargs killall 2>/dev/null
         ! ps axco command | grep gdm- | xargs killall 2>/dev/null
+        ! virsh net-start default 2>/dev/null
 
         sleep 3
 
@@ -238,7 +239,7 @@ case "$1" in
 
     teardown-hugepages)
         echo "[INFO] Attempting to deallocate ${HUGEPAGE_COUNT} HugePages"
-        echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+        echo 0 > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
 
         ;&
 

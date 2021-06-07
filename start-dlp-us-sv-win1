@@ -17,6 +17,9 @@ VM_DOMAIN="dlp-us-sv-win1"
 # 00:1f.3 Audio device: Intel Corporation 200 Series PCH HD Audio
 # 00:14.0 USB device: Intel Corporation 200 Series/Z370 Chipset Family USB 3.0 xHCI Controller
 #
+# Pass through but do not force through stub driver
+# 0b:00.0 Non-Volatile memory controller: Phison Electronics Corporation E12 NVMe Controller (rev 01)
+#
 PCI_DEVICEIDS="0000:01:00.0 0000:01:00.1 0000:00:1f.3 0000:00:14.0"
 
 # Blacklised services and modules are stopped before devices are passed through and restarted
@@ -140,7 +143,7 @@ case "$1" in
                     while [[ ! -e "/sys/bus/pci/devices/${dev}" ]]; do sleep 0.1; done
 
                     echo "[INFO] ----> Adding device to vfio-pci id list"
-                    echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/new_id
+                    ! echo ${vendor} ${device} > /sys/bus/pci/drivers/vfio-pci/new_id
                     sleep 2
 
                     echo "[INFO] ----> Verifying device is attached to vfio-pci stub driver"
@@ -167,6 +170,7 @@ case "$1" in
         echo "[INFO] Dropping kernel caches & compacting memory"
         echo 3 > /proc/sys/vm/drop_caches
         echo 1 > /proc/sys/vm/compact_memory
+        sleep 3
 
         echo "[INFO] Attempting to allocate ${HUGEPAGE_COUNT} HugePages"
         echo ${HUGEPAGE_COUNT} > /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
@@ -185,12 +189,13 @@ case "$1" in
 
     isolate-cores)
         echo "[INFO] Reserving CPUs ${VIRT_CORES} for VM"
-        cset -m set -c ${TOTAL_CORES} -s machine.slice
-        cset -m shield --kthread on --cpu ${VIRT_CORES}
+        systemctl set-property --runtime -- user.slice AllowedCPUs=$HOST_CORES     
+        systemctl set-property --runtime -- system.slice AllowedCPUs=$HOST_CORES
+        systemctl set-property --runtime -- init.scope AllowedCPUs=$HOST_CORES
 
         # the kernel's dirty page writeback mechanism uses kthread workers. They introduce
         # massive arbitrary latencies when doing disk writes on the host and aren't
-        # migrated by cset. Restrict the workqueue to use only cpu 0.
+        # migrated by systemd. Restrict the workqueue to use only cpu 0.
         echo $HOST_CORES_MASK > /sys/bus/workqueue/devices/writeback/cpumask
         echo 0 > /sys/bus/workqueue/devices/writeback/numa
         ;&
@@ -199,15 +204,17 @@ case "$1" in
         echo "[INFO] Starting virtual machine (${VM_DOMAIN})"
         #ulimit -r 99
         #sysctl -w kernel.sched_rt_runtime_us=-1
+        sysctl vm.stat_interval=120
+        sysctl -w kernel.watchdog=0
         
         virsh start ${VM_DOMAIN}
         sleep 15
 
         # Set the nice of all vCPUs
-        for grp in /sys/fs/cgroup/cpu/machine.slice/machine-qemu*.scope/vcpu*
+        for f in /sys/fs/cgroup/machine.slice/machine-qemu*.scope/cgroup.threads
         do
-            echo "[INFO] libvirt-qemu nice: Setting $(basename $grp)'s nice level to -1"
-            for pid in $(cat $grp/tasks)
+            echo "[INFO] libvirt-qemu nice: Setting $($f)'s nice level to -1"
+            for pid in $(cat $f)
             do
                 renice -n "-1" -p "$pid"
             done
@@ -220,19 +227,24 @@ case "$1" in
 
         echo "[INFO] Waiting for virtual machine to exit"
         while true; do
-            sleep 15
             [[ $(virsh domstate ${VM_DOMAIN}) =~ "shut off" ]] && break
+            sleep 15
         done
         ;&
 
     restore-settings)
         #ulimit -r 0
         #sysctl -w kernel.sched_rt_runtime_us=950000
+        sysctl vm.stat_interval=1
+        sysctl -w kernel.watchdog=1
         ;&
 
     unisolate-cores)
         echo "[INFO] Unreserving CPUs ${VIRT_CORES}"
-        ! cset -m shield --reset
+        systemctl set-property --runtime -- user.slice AllowedCPUs=$TOTAL_CORES 
+        systemctl set-property --runtime -- system.slice AllowedCPUs=$TOTAL_CORES
+        systemctl set-property --runtime -- init.scope AllowedCPUs=$TOTAL_CORES
+
         echo $TOTAL_CORES_MASK > /sys/bus/workqueue/devices/writeback/cpumask
         echo 1 > /sys/bus/workqueue/devices/writeback/numa
         ;&
@@ -294,6 +306,12 @@ case "$1" in
                     break
                 fi
             done
+        done
+
+        # Try reloading modules again after hardware dependencies have loaded
+        for i in ${BLACKLISTED_MODULES}; do
+            echo "[INFO] -> Trying to load kernel module ${i}"
+            ! modprobe ${i}
         done
         ;&
 
